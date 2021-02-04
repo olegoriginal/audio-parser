@@ -6,7 +6,11 @@
   "dependencies": {
     "axios": "^0.21.1",
     "cheerio": "^1.0.0-rc.5",
+    "express": "^4.17.1",
+    "image-downloader": "^4.0.2",
+    "node-image-downloader": "^1.0.7",
     "nodemon": "^2.0.7",
+    "request": "^2.88.2",
     "uuid": "^8.3.2"
   },
   "devDependencies": {},

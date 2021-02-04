@@ -2,12 +2,23 @@ const axios = require("axios");
 const cheerio = require("cheerio");
 const fs = require("fs");
 const uuid = require("uuid");
+const https = require("https");
+const path = require("path");
+const express = require("express"); // import express js library
+const app = express();
+const request = require("request");
+const download = require("image-downloader");
+const imageDownloader = require('node-image-downloader')
 
-const url = "https://audio-master.net";
+declare module download {
+  image(options: Options): Promise<{ filename: string }>;
+}
+
+const urlMain = "https://audio-master.net";
 
 async function takeCategories() {
   return new Promise((resolve) => {
-    axios.get(url).then((res) => {
+    axios.get(urlMain).then((res) => {
       const categories = [];
       const $ = cheerio.load(res.data);
       const get = $(".category").each((index, element) => {
@@ -21,7 +32,7 @@ async function takeCategories() {
           .children("h2")
           .children("a")
           .attr("href");
-        const image = $(element)
+        const imageFile = $(element)
           .children("div")
           .children("h2")
           .children("a")
@@ -30,21 +41,21 @@ async function takeCategories() {
         categories[index] = {
           title,
           link: link,
-          fulllink: url + link,
+          fulllink: urlMain + link,
           parrentCategory: "none",
-          imageLink: url + image,
-          image: image.split("/").slice(-1)[0],
+          imageLink: urlMain + imageFile,
+          image: imageFile.split("/").slice(-1)[0],
         };
-        fs.writeFile(
-          `img/${image.split("/").slice(-1)[0]}`,
-          url && link,
-          (err) => {
-            if (err) console.log(err);
-            else {
-              console.log("Image written successfully\n");
-            }
-          }
-        );
+        const options = {
+          url: "http://img.crazys.info/files/i/2011.2.13/1297564811_w25.jpg",
+          dest: "/img/tt", // will be saved to /path/to/dest/image.jpg
+        };
+        download
+          .image(options)
+          .then(({ filename }) => {
+            console.log("Saved to", filename); // saved to /path/to/dest/image.jpg
+          })
+          .catch((err) => console.error(err));
       });
       fs.writeFile(
         "json/categories.json",
@@ -64,3 +75,7 @@ async function takeCategories() {
 
 takeCategories();
 // git test
+
+app.listen(8000, () => {
+  console.log(`application is running at: http://localhost:8000`);
+});
