@@ -2,23 +2,24 @@ const axios = require("axios");
 const cheerio = require("cheerio");
 const fs = require("fs");
 const uuid = require("uuid");
-const https = require("https");
 const path = require("path");
-const express = require("express"); // import express js library
-const app = express();
-const request = require("request");
-const download = require("image-downloader");
-const imageDownloader = require('node-image-downloader')
+const ID = require("nodejs-unique-numeric-id-generator");
+const saveImageToDisk = require("./img");
 
-declare module download {
-  image(options: Options): Promise<{ filename: string }>;
-}
+const url = "https://audio-master.net";
 
-const urlMain = "https://audio-master.net";
+const makeIdGreatAgain = (uri) => {
+  let encode = "";
+  for (let i = 0; i < uri.length; i++) {
+    let x = uri.slice(i, i + 1);
+    encode += x.charCodeAt(0);
+  }
+  return encode.toString().substr(-9);
+};
 
 async function takeCategories() {
   return new Promise((resolve) => {
-    axios.get(urlMain).then((res) => {
+    axios.get(url).then((res) => {
       const categories = [];
       const $ = cheerio.load(res.data);
       const get = $(".category").each((index, element) => {
@@ -32,7 +33,7 @@ async function takeCategories() {
           .children("h2")
           .children("a")
           .attr("href");
-        const imageFile = $(element)
+        const image = $(element)
           .children("div")
           .children("h2")
           .children("a")
@@ -41,41 +42,110 @@ async function takeCategories() {
         categories[index] = {
           title,
           link: link,
-          fulllink: urlMain + link,
-          parrentCategory: "none",
-          imageLink: urlMain + imageFile,
-          image: imageFile.split("/").slice(-1)[0],
+          fulllink: url + link,
+          category_id: makeIdGreatAgain(link),
+          parent_id: "",
+          imageLink: encodeURI(url + image),
+          image: `catalog/img/${encodeURI(image.split("/").slice(-1)[0])}`,
         };
-        const options = {
-          url: "http://img.crazys.info/files/i/2011.2.13/1297564811_w25.jpg",
-          dest: "/img/tt", // will be saved to /path/to/dest/image.jpg
-        };
-        download
-          .image(options)
-          .then(({ filename }) => {
-            console.log("Saved to", filename); // saved to /path/to/dest/image.jpg
-          })
-          .catch((err) => console.error(err));
+        saveImageToDisk(
+          encodeURI(`${url}${image}`),
+          `./img/${encodeURI(image.split("/").slice(-1)[0])}`
+        );
       });
       fs.writeFile(
-        "json/categories.json",
-        JSON.stringify(categories),
+        "json/categoriesmain.json",
+        JSON.stringify({ cat: categories }),
         (err) => {
           if (err) console.log(err);
           else {
-            console.log("File catgories written successfully\n");
+            console.log("File categories written successfully\n");
           }
         }
       );
+      const full = [];
+      categories.forEach((item) => {
+        axios.get(item.fulllink).then((res) => {
+          const subcategories = [];
+          const $ = cheerio.load(res.data);
+          const get = $(".category").each((index, element) => {
+            const title = $(element)
+              .children("div")
+              .children("h2")
+              .children("a")
+              .attr("title");
+            const link = $(element)
+              .children("div")
+              .children("h2")
+              .children("a")
+              .attr("href");
+            const image = $(element)
+              .children("div")
+              .children("h2")
+              .children("a")
+              .children("img")
+              .attr("src");
+            subcategories[index] = {
+              title,
+              link: link,
+              fulllink: url + link,
+              category_id: makeIdGreatAgain(link),
+              parent_id: item.category_id,
+              imageLink: encodeURI(url + image),
+              image: `catalog/img/${encodeURI(image.split("/").slice(-1)[0])}`,
+            };
+            const current = {
+              title,
+              link: link,
+              fulllink: url + link,
+              category_id: makeIdGreatAgain(link),
+              parent_id: item.category_id,
+              imageLink: encodeURI(url + image),
+              image: `catalog/img/${encodeURI(image.split("/").slice(-1)[0])}`,
+            };
+            saveImageToDisk(
+              encodeURI(`${url}${image}`),
+              `./img/${encodeURI(image.split("/").slice(-1)[0])}`
+            );
+            if (
+              current &&
+              current.title &&
+              current.link &&
+              current.fulllink &&
+              current.category_id
+            ) {
+              fs.readFile("json/categoriesmain.json", function (err, content) {
+                if (err) throw err;
+                const parseJson = JSON.parse(content);
+                for (i = 0; i < 11; i++) {
+                  parseJson.cat.concat(current);
+                }
+                fs.writeFile(
+                  "json/categories.json",
+                  JSON.stringify(parseJson),
+                  function (err) {
+                    if (err) throw err;
+                  }
+                );
+              });
+            }
+          });
+        });
+      });
       resolve(categories);
-      console.log(categories);
     });
   });
 }
 
-takeCategories();
-// git test
+async function takeProducts() {
+  const categories = await takeCategories();
+  // const categoryList = fs.readFile("json/categories.json", (err, data) => {
+  //   if (err) throw err;
+  //   console.log(data);
+  // });
+  return new Promise((resolve) => {
+    return categories;
+  });
+}
 
-app.listen(8000, () => {
-  console.log(`application is running at: http://localhost:8000`);
-});
+takeProducts();
