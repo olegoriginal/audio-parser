@@ -4,9 +4,12 @@ const fs = require("fs");
 const uuid = require("uuid");
 const path = require("path");
 const ID = require("nodejs-unique-numeric-id-generator");
+const { JsonDB } = require("node-json-db");
+const { Config } = require("node-json-db/dist/lib/JsonDBConfig");
 const saveImageToDisk = require("./img");
 
 const url = "https://audio-master.net";
+const db = new JsonDB(new Config("dataBase", true, false, "/"));
 
 const makeIdGreatAgain = (uri) => {
   let encode = "";
@@ -19,8 +22,8 @@ const makeIdGreatAgain = (uri) => {
 
 async function takeCategories() {
   return new Promise((resolve) => {
+    const categories = [];
     axios.get(url).then((res) => {
-      const categories = [];
       const $ = cheerio.load(res.data);
       const get = $(".category").each((index, element) => {
         const title = $(element)
@@ -42,7 +45,7 @@ async function takeCategories() {
         categories[index] = {
           title,
           link: link,
-          fulllink: url + link,
+          fulllink: url + link + "/results,1-999",
           category_id: makeIdGreatAgain(link),
           parent_id: "",
           imageLink: encodeURI(url + image),
@@ -53,17 +56,8 @@ async function takeCategories() {
           `./img/${encodeURI(image.split("/").slice(-1)[0])}`
         );
       });
-      fs.writeFile(
-        "json/categoriesmain.json",
-        JSON.stringify({ cat: categories }),
-        (err) => {
-          if (err) console.log(err);
-          else {
-            console.log("File categories written successfully\n");
-          }
-        }
-      );
-      const full = [];
+      db.push("/cat", categories);
+      console.log("categories written");
       categories.forEach((item) => {
         axios.get(item.fulllink).then((res) => {
           const subcategories = [];
@@ -88,7 +82,7 @@ async function takeCategories() {
             subcategories[index] = {
               title,
               link: link,
-              fulllink: url + link,
+              fulllink: url + link + "/results,1-999",
               category_id: makeIdGreatAgain(link),
               parent_id: item.category_id,
               imageLink: encodeURI(url + image),
@@ -97,7 +91,7 @@ async function takeCategories() {
             const current = {
               title,
               link: link,
-              fulllink: url + link,
+              fulllink: url + link + "/results,1-999",
               category_id: makeIdGreatAgain(link),
               parent_id: item.category_id,
               imageLink: encodeURI(url + image),
@@ -114,37 +108,37 @@ async function takeCategories() {
               current.fulllink &&
               current.category_id
             ) {
-              fs.readFile("json/categoriesmain.json", function (err, content) {
-                if (err) throw err;
-                const parseJson = JSON.parse(content);
-                for (i = 0; i < 11; i++) {
-                  parseJson.cat.concat(current);
-                }
-                fs.writeFile(
-                  "json/categories.json",
-                  JSON.stringify(parseJson),
-                  function (err) {
-                    if (err) throw err;
-                  }
-                );
-              });
+              db.push("/cat", [current], false);
             }
           });
         });
       });
-      resolve(categories);
+      console.log("sub categories written");
     });
+    resolve(db.getData("/cat"));
   });
 }
 
 async function takeProducts() {
-  const categories = await takeCategories();
-  // const categoryList = fs.readFile("json/categories.json", (err, data) => {
-  //   if (err) throw err;
-  //   console.log(data);
-  // });
+  const categoryList = await takeCategories();
+  cats = db.getData("/cat");
   return new Promise((resolve) => {
-    return categories;
+    cats.forEach((item) => {
+      axios.get(item.fulllink).then((res) => {
+        const products = [];
+        const $ = cheerio.load(res.data);
+        const get = $(".vm-product-media-container").each((index, element) => {
+          const link = $(element).children("a").attr("href");
+          if (link && link !== "") {
+            db.push(
+              "/productlinks",
+              [{ link: url + link, category_id: item.category_id }],
+              false
+            );
+          }
+        });
+      });
+    });
   });
 }
 
